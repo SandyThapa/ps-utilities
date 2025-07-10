@@ -1,0 +1,14 @@
+filters = CreateArrayRept(&lTempArry, 0);
+
+&filters.Push(CreateArray("Key1", "Value1"));
+&filters.Push(CreateArray("Key2", "Key2"));
+Local array of string &selectFields = CreateArray("Select_field1");
+
+Local array of string &defaultOrderByFields = CreateArrayRept("", 0);
+Local array of string &defaultSelectFields = CreateArrayRept("", 0);
+   
+
+Local string &recName = "PS_TABLE_NAME";
+
+ Rem   Local MODEL:PS_Model &model = create MODEL:PS_MODEL(); /* import your class before you can use function */
+Local array of Record &rows = &model.FetchRowsFromTable(&filters, &defaultOrderByFields, &defaultSelectFields, &recName);
