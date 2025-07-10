@@ -1,0 +1,206 @@
+class PS_Model;
+      
+   method GetCount(&tableName As Record, &filters As array of array of string, &fieldName As string) Returns number;
+   method FetchRowsFromTable(&filters As array of array of string, &orderByFields As array of string, &selectFields As array of string, &recName As string) Returns array of Record;
+end-class;
+
+/**
+ * GetCount
+ *
+ * Returns the count of records from a specified PeopleSoft table based on dynamic filters.
+ *
+ * @param Record $tableName   The record object representing the table to query.
+ * @param array[][] $filters  A 2D array of filters where each filter is [fieldName, operator, value].
+ * @param string $fieldName   The field to count; if empty, default to COUNT(*).
+ *
+ * @return number             The count of matching records.
+ */
+
+
+method GetCount
+   /+ &tableName as Record, +/
+   /+ &filters as Array2 of String, +/
+   /+ &fieldName as String +/
+   /+ Returns Number +/
+   
+   Local string &countExpr, &sqlText, &whereClause;
+   Local number &count, &i, &paramIndex;
+   Local array of any &bindValues;
+   
+   Local array of any &lTempArray = CreateArrayAny(&tableName);
+   /* Use COUNT(fieldName) or COUNT(*) */
+   If All(&fieldName) Then
+      &countExpr = &fieldName;
+   Else
+      &countExpr = "*";
+   End-If;
+   
+   /* Base SQL */
+   &sqlText = "SELECT COUNT(" | &countExpr | ") FROM %TABLE(:1) b";
+   
+   /* Build WHERE clause */
+   &bindValues = CreateArray();
+   
+   
+   &paramIndex = 2;
+   If &filters.Len > 0 Then
+      &whereClause = " WHERE ";
+      For &i = 1 To &filters.Len
+         Local string &key, &op;
+         Local any &val;
+         
+         &key = &filters [&i][1];
+         &op = &filters [&i][2];
+         &val = &filters [&i][3];
+         
+         If &i > 1 Then
+            &whereClause = &whereClause | " AND ";
+         End-If;
+         
+         &whereClause = &whereClause | "b." | &key | " " | &op | " :" | &paramIndex;
+         &bindValues.Push(&val);
+         &paramIndex = &paramIndex + 1;
+      End-For;
+      
+      &sqlText = &sqlText | &whereClause;
+   End-If;
+   
+   /* Pass all bind values to SQL */
+   
+   
+   
+   For &i = 1 To &bindValues.Len
+      &lTempArray.Push(&bindValues [&i]);
+   End-For;
+   
+   /* Run the query */
+   
+   Local SQL &sql = GetSQL(&sqlText, &lTempArray);
+   If &sql.Fetch(&count) Then
+      Return &count;
+   Else
+      Return 0;
+   End-If;
+end-method;
+
+
+/**
+ * FetchRowsFromTable
+ *
+ * Retrieves rows from a specified PeopleSoft record using dynamic filters and optional ordering.
+ *
+ * @param array[][] $filters        A 2D array of filters where each filter is [fieldName, value].
+ * @param array $orderByFields      An array of field names to order the results by.
+ * @param array $selectFields       An array of field names to select (currently unused).
+ * @param string $recName           The name of the record to query.
+ *
+ * @return array<Record>            An array of Record objects matching the filter criteria.
+ */
+
+method FetchRowsFromTable
+   /+ &filters as Array2 of String, +/
+   /+ &orderByFields as Array of String, +/
+   /+ &selectFields as Array of String, +/
+   /+ &recName as String +/
+   /+ Returns Array of Record +/
+   
+   
+   Local SQL &sql;
+   Local string &whereClause = "";
+   Local string &orderClause = "";
+   Local string &selectClause = "";
+   Local array of string &bindValues = CreateArrayRept("", 0);
+   Local string &key;
+   Local string &value;
+   Local integer &i, &j;
+   Local integer &paramIndex = 2;
+   
+   
+   &recName = "RECORD." | &recName;
+   Local Record &lRecSelect = CreateRecord(@&recName);
+   Local array of Record &resultRows = CreateArrayRept(&lRecSelect, 0);
+   
+   Local Row &row;
+   Local integer &k;
+   Local array of any &lTempArry = CreateArrayAny(&lRecSelect);
+   
+   
+   /* Early exit if no filters provided */
+   If &filters.Len = 0 Then
+      Return &resultRows;
+   End-If;
+   
+   /* Build SELECT clause -- Functional but not in use at the moment  : This is future @TODO  for this function 
+
+   If &selectFields.Len > 0 Then
+      For &i = 1 To &selectFields.Len
+         If &i > 1 Then
+            &selectClause = &selectClause | ", ";
+         End-If;
+         &selectClause = &selectClause | "b." | RTrim(LTrim(&selectFields [&i]));
+      End-For;
+   Else
+      &selectClause = "b.*";
+   End-If;
+   */
+   /* Build WHERE clause from map keys and values */
+   &i = 1;
+   
+   For &i = 1 To &filters.Len
+      &key = LTrim(RTrim(&filters [&i][1]));
+      &value = LTrim(RTrim(&filters [&i][2]));
+      
+      If &paramIndex > 2 Then
+         &whereClause = &whereClause | " AND ";
+      End-If;
+      
+      &whereClause = &whereClause | "b." | &key | " = :" | &paramIndex | " ";
+      &bindValues.Push(&value);
+      &paramIndex = &paramIndex + 1;
+   End-For;
+   
+   &i = 1;
+   /* Build ORDER BY clause if provided */
+   If &orderByFields.Len > 0 Then
+      &orderClause = " ORDER BY ";
+      For &i = 1 To &orderByFields.Len
+         If &i > 1 Then
+            &orderClause = &orderClause | ", ";
+         End-If;
+         &orderClause = &orderClause | "b." | LTrim(RTrim(&orderByFields [&i]));
+      End-For;
+   End-If;
+   
+   /* Prepare SQL Bind Values */
+   For &k = 1 To &bindValues.Len
+      &lTempArry.Push(&bindValues [&k]);
+      
+   End-For;
+   
+   /* Future scope, is to make dynamic select as per sql clause but for now, we will just select *
+   Local string &lSqlStr = "SELECT " | &selectClause | " FROM ps_gu_config_data b WHERE " | &whereClause | &orderClause;
+   */
+   &sql = GetSQL("SELECT * from %TABLE(:1)  b WHERE " | &whereClause | &orderClause, &lTempArry);
+   
+   /* Fetch rows correctly 
+    Had to copy record because it was replacing value by default, took me some time to figure that out as thats what peopelsoft default behaviour is.
+   */
+   While &sql.Fetch(&lRecSelect)
+      Local Record &copyRec = CreateRecord(@&recName);
+      For &i = 1 To &copyRec.FieldCount
+         &copyRec.GetField(&i).Value = &lRecSelect.GetField(&i).Value;
+      End-For;
+      
+      &resultRows.Push(&copyRec);
+   End-While;
+   
+   /* Optional: log or throw if no results */
+   If &resultRows.Len = 0 Then
+      MessageBox(0, "", 0, 0, "No result found for record : " | &recName);
+   End-If;
+   
+   
+   Return &resultRows;
+   
+end-method;
+
