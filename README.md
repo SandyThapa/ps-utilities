@@ -13,6 +13,6 @@ This repository provides reusable PeopleCode methods for counting and fetching r
 
 Simply copy the provided App Class methods into your PeopleSoft project. Import your class properly. No external dependencies required.
 
-Special thanks to ##Griffith University## the ideas and actions behind this code were shaped while working on various solutions for Griffith. As a contribution to the broader PeopleSoft community, this work is made publicly available for free use and improvement. We hope it supports and inspires others working in similar domains.
+Special thanks to Griffith University, the ideas and actions behind this code were shaped while working on various solutions for Griffith. As a contribution to the broader PeopleSoft community, this work is made publicly available for free use and improvement. We hope it supports and inspires others working in similar domains.
 
 We warmly invite others to contribute, enhance, and help build a stronger shared codebase for the community. Your improvements, feedback, and shared knowledge are always welcome!
