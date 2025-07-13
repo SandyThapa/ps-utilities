@@ -2,6 +2,7 @@ class PS_Model;
       
    method GetCount(&tableName As Record, &filters As array of array of string, &fieldName As string) Returns number;
    method FetchRowsFromTable(&filters As array of array of string, &orderByFields As array of string, &selectFields As array of string, &recName As string) Returns array of Record;
+  method GetDateType(&fieldName As string) Returns string;
 end-class;
 
 /**
@@ -16,7 +17,6 @@ end-class;
  * @return number             The count of matching records.
  */
 
-
 method GetCount
    /+ &tableName as Record, +/
    /+ &filters as Array2 of String, +/
@@ -26,7 +26,7 @@ method GetCount
    Local string &countExpr, &sqlText, &whereClause;
    Local number &count, &i, &paramIndex;
    Local array of any &bindValues;
-   
+   Local string &dataType;
    Local array of any &lTempArray = CreateArrayAny(&tableName);
    /* Use COUNT(fieldName) or COUNT(*) */
    If All(&fieldName) Then
@@ -56,8 +56,36 @@ method GetCount
          If &i > 1 Then
             &whereClause = &whereClause | " AND ";
          End-If;
+         /* Check Data type*/
+         &dataType = %This.GetDateType(&key);
          
-         &whereClause = &whereClause | "b." | &key | " " | &op | " :" | &paramIndex;
+         
+         Evaluate &dataType
+         When = "Date"
+            
+            &whereClause = &whereClause | "b." | &key | " " | &op | " %DATEIN(:" | &paramIndex | " ) ";
+            
+            Break;
+         When = "Time"
+            
+            &whereClause = &whereClause | "b." | &key | " " | &op | " %TIMEIN(:" | &paramIndex | " ) ";
+            
+            Break;
+         When = "DateTime"
+            &whereClause = &whereClause | "b." | &key | " " | &op | " %DATETIMEIN(:" | &paramIndex | " ) ";
+            
+            
+            Break;
+            
+            
+         When-Other
+            &whereClause = &whereClause | "b." | &key | " " | &op | " :" | &paramIndex;
+            Break;
+            
+         End-Evaluate;
+         
+         rem  &whereClause = &whereClause | "b." | &key | " " | &op | " :" | &paramIndex;
+         
          &bindValues.Push(&val);
          &paramIndex = &paramIndex + 1;
       End-For;
@@ -82,6 +110,7 @@ method GetCount
       Return 0;
    End-If;
 end-method;
+
 
 
 /**
@@ -203,4 +232,96 @@ method FetchRowsFromTable
    Return &resultRows;
    
 end-method;
+
+
+
+
+/**
+ * GetDateType
+ * 
+ * @param string $fieldName
+ * @return string
+ */
+
+method GetDateType
+   /+ &fieldName as String +/
+   /+ Returns String +/
+   
+   rem check PSDBFIELD;
+   Local Record &recordField = CreateRecord(Record.PSDBFIELD);
+   &recordField.FIELDNAME.Value = &fieldName;
+   If &recordField.SelectByKey() Then
+      
+      /*
+		0=Character
+		1=Long Character
+		2=Number
+		3=Signed Number
+		4=Date
+		5=Time
+		6=DateTime
+		8=Image / Attachment
+		9=Image Reference
+	*/
+       Evaluate &recordField.FIELDTYPE.Value
+      When = 0
+         
+         Return "Character";
+         
+         Break;
+      When = 1
+         
+         Return "Long Character";
+         
+         Break;
+      When = 2
+         
+         Return "Number";
+         
+         Break;
+      When = 3
+         
+         Return "Signed Number";
+         
+         Break;
+         
+      When = 4
+         /*4=Date */
+         Return "Date";
+         
+         Break;
+      When = 5
+         /*4=Time */
+         Return "Time";
+         Break;
+      When = 6
+         /*4=DateTime */
+         Return "DateTime";
+         
+      When = 8
+         /*4=DateTime */
+         Return "Image / Attachment";
+         
+         Break;
+      When = 9
+         /*4=DateTime */
+         Return "Image Reference";
+         
+         Break;
+         
+         Break;
+      When-Other
+         /*4=DateTime */
+         Return "Other";
+         
+         Break;
+      End-Evaluate;
+  End-If;
+   
+   Local string &dataType = "datatype";
+   
+   
+   Return &dataType;
+end-method;
+
 
