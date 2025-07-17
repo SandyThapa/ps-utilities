@@ -1,8 +1,11 @@
-class PS_Model;
-      
+class GuModel;
+     
    method GetCount(&tableName As Record, &filters As array of array of string, &fieldName As string) Returns number;
    method FetchRowsFromTable(&filters As array of array of string, &orderByFields As array of string, &selectFields As array of string, &recName As string) Returns array of Record;
-  method GetDateType(&fieldName As string) Returns string;
+   method GetDateType(&fieldName As string) Returns string;
+   method BuildWhereClause(&key As string, &op As string, &paramIndex As integer) Returns string;
+   method BuildWhereClauseFromFilters(&filters As array of array of string, &paramIndex As integer, &bindValues As array of any) Returns string;
+   
 end-class;
 
 /**
@@ -40,69 +43,19 @@ method GetCount
    
    /* Build WHERE clause */
    &bindValues = CreateArray();
-   
-   
    &paramIndex = 2;
    If &filters.Len > 0 Then
-      &whereClause = " WHERE ";
-      For &i = 1 To &filters.Len
-         Local string &key, &op;
-         Local any &val;
-         
-         &key = &filters [&i][1];
-         &op = &filters [&i][2];
-         &val = &filters [&i][3];
-         
-         If &i > 1 Then
-            &whereClause = &whereClause | " AND ";
-         End-If;
-         /* Check Data type*/
-         &dataType = %This.GetDateType(&key);
-         
-         
-         Evaluate &dataType
-         When = "Date"
-            
-            &whereClause = &whereClause | "b." | &key | " " | &op | " %DATEIN(:" | &paramIndex | " ) ";
-            
-            Break;
-         When = "Time"
-            
-            &whereClause = &whereClause | "b." | &key | " " | &op | " %TIMEIN(:" | &paramIndex | " ) ";
-            
-            Break;
-         When = "DateTime"
-            &whereClause = &whereClause | "b." | &key | " " | &op | " %DATETIMEIN(:" | &paramIndex | " ) ";
-            
-            
-            Break;
-            
-            
-         When-Other
-            &whereClause = &whereClause | "b." | &key | " " | &op | " :" | &paramIndex;
-            Break;
-            
-         End-Evaluate;
-         
-         rem  &whereClause = &whereClause | "b." | &key | " " | &op | " :" | &paramIndex;
-         
-         &bindValues.Push(&val);
-         &paramIndex = &paramIndex + 1;
-      End-For;
+      &whereClause = " WHERE " | %This.BuildWhereClauseFromFilters(&filters, &paramIndex, &bindValues);
       
-      &sqlText = &sqlText | &whereClause;
    End-If;
+   &sqlText = &sqlText | &whereClause;
    
    /* Pass all bind values to SQL */
-   
-   
-   
    For &i = 1 To &bindValues.Len
       &lTempArray.Push(&bindValues [&i]);
    End-For;
    
    /* Run the query */
-   
    Local SQL &sql = GetSQL(&sqlText, &lTempArray);
    If &sql.Fetch(&count) Then
       Return &count;
@@ -110,7 +63,6 @@ method GetCount
       Return 0;
    End-If;
 end-method;
-
 
 
 /**
@@ -125,7 +77,6 @@ end-method;
  *
  * @return array<Record>            An array of Record objects matching the filter criteria.
  */
-
 method FetchRowsFromTable
    /+ &filters as Array2 of String, +/
    /+ &orderByFields as Array of String, +/
@@ -138,9 +89,11 @@ method FetchRowsFromTable
    Local string &whereClause = "";
    Local string &orderClause = "";
    Local string &selectClause = "";
-   Local array of string &bindValues = CreateArrayRept("", 0);
-   Local string &key;
-   Local string &value;
+   rem  Local array of String &bindValues = CreateArrayRept("", 0);
+   Local array of any &bindValues;
+   
+   Local string &key, &op;
+   Local any &value;
    Local integer &i, &j;
    Local integer &paramIndex = 2;
    
@@ -152,7 +105,7 @@ method FetchRowsFromTable
    Local Row &row;
    Local integer &k;
    Local array of any &lTempArry = CreateArrayAny(&lRecSelect);
-   
+   &bindValues = CreateArray();
    
    /* Early exit if no filters provided */
    If &filters.Len = 0 Then
@@ -173,20 +126,8 @@ method FetchRowsFromTable
    End-If;
    */
    /* Build WHERE clause from map keys and values */
-   &i = 1;
    
-   For &i = 1 To &filters.Len
-      &key = LTrim(RTrim(&filters [&i][1]));
-      &value = LTrim(RTrim(&filters [&i][2]));
-      
-      If &paramIndex > 2 Then
-         &whereClause = &whereClause | " AND ";
-      End-If;
-      
-      &whereClause = &whereClause | "b." | &key | " = :" | &paramIndex | " ";
-      &bindValues.Push(&value);
-      &paramIndex = &paramIndex + 1;
-   End-For;
+   &whereClause = " WHERE " | %This.BuildWhereClauseFromFilters(&filters, &paramIndex, &bindValues);
    
    &i = 1;
    /* Build ORDER BY clause if provided */
@@ -209,7 +150,7 @@ method FetchRowsFromTable
    /* Future scope, is to make dynamic select as per sql clause but for now, we will just select *
    Local string &lSqlStr = "SELECT " | &selectClause | " FROM ps_gu_config_data b WHERE " | &whereClause | &orderClause;
    */
-   &sql = GetSQL("SELECT * from %TABLE(:1)  b WHERE " | &whereClause | &orderClause, &lTempArry);
+   &sql = GetSQL("SELECT * from %TABLE(:1)  b  " | &whereClause | &orderClause, &lTempArry);
    
    /* Fetch rows correctly 
     Had to copy record because it was replacing value by default, took me some time to figure that out as thats what peopelsoft default behaviour is.
@@ -233,9 +174,6 @@ method FetchRowsFromTable
    
 end-method;
 
-
-
-
 /**
  * GetDateType
  * 
@@ -247,7 +185,6 @@ method GetDateType
    /+ &fieldName as String +/
    /+ Returns String +/
    
-   rem check PSDBFIELD;
    Local Record &recordField = CreateRecord(Record.PSDBFIELD);
    &recordField.FIELDNAME.Value = &fieldName;
    If &recordField.SelectByKey() Then
@@ -263,65 +200,126 @@ method GetDateType
 		8=Image / Attachment
 		9=Image Reference
 	*/
-       Evaluate &recordField.FIELDTYPE.Value
+      Evaluate &recordField.FIELDTYPE.Value
       When = 0
-         
          Return "Character";
-         
          Break;
+         
       When = 1
-         
          Return "Long Character";
-         
          Break;
+         
       When = 2
-         
          Return "Number";
-         
          Break;
+         
       When = 3
-         
          Return "Signed Number";
-         
          Break;
          
       When = 4
-         /*4=Date */
          Return "Date";
-         
          Break;
+         
       When = 5
-         /*4=Time */
          Return "Time";
          Break;
+         
       When = 6
-         /*4=DateTime */
          Return "DateTime";
+         Break;
          
       When = 8
-         /*4=DateTime */
          Return "Image / Attachment";
-         
          Break;
+         
       When = 9
-         /*4=DateTime */
          Return "Image Reference";
-         
          Break;
          
-         Break;
       When-Other
-         /*4=DateTime */
          Return "Other";
-         
          Break;
+         
       End-Evaluate;
-  End-If;
-   
-   Local string &dataType = "datatype";
-   
-   
-   Return &dataType;
+   End-If;
 end-method;
 
+
+/** 
+ * BuildWhereClause
+ * Constructs a SQL WHERE clause "condition" based on the data type of the field.
+ *
+ * @param string &key         The field name to filter on.
+ * @param string &op          The SQL operator (e.g., =, <, >).
+ * @param integer &paramIndex The bind parameter index.
+ * @return string             The constructed WHERE clause fragment.
+ */
+
+method BuildWhereClause
+   /+ &key as String, +/
+   /+ &op as String, +/
+   /+ &paramIndex as Integer +/
+   /+ Returns String +/
+   Local string &clause;
+   Local string &dataType = %This.GetDateType(&key);
+   
+   
+   Evaluate &dataType
+   When = "Date"
+      &clause = "b." | &key | " " | &op | " %DATEIN(:" | &paramIndex | " ) ";
+   When = "Time"
+      &clause = "b." | &key | " " | &op | " %TIMEIN(:" | &paramIndex | " ) ";
+   When = "DateTime"
+      &clause = "b." | &key | " " | &op | " %DATETIMEIN(:" | &paramIndex | " ) ";
+   When-Other
+      &clause = "b." | &key | " " | &op | " :" | &paramIndex;
+   End-Evaluate;
+   
+   Return &clause;
+end-method;
+
+
+/**
+ * BuildWhereClauseFromFilters
+ * Builds a complete WHERE clause from a list of filters and populates bind values.
+ *
+ * @param array &filters      Array of filters, each being an array of 2 or 3 elements.
+ * @param integer &paramIndex Bind parameter index (passed by reference).
+ * @param array &bindValues   Array to collect bind values (passed by reference).
+ * @return string             The full WHERE clause string (without the "WHERE" keyword).
+ */
+
+method BuildWhereClauseFromFilters
+   /+ &filters as Array2 of String, +/
+   /+ &paramIndex as Integer, +/
+   /+ &bindValues as Array of Any +/
+   /+ Returns String +/
+   Local string &whereClause = "";
+   Local string &key, &op;
+   Local any &val;
+   Local integer &i;
+   
+   For &i = 1 To &filters.Len
+      &key = LTrim(RTrim(&filters [&i][1]));
+      
+      If &filters [&i].Len = 3 Then
+         &op = LTrim(RTrim(&filters [&i][2]));
+         &val = &filters [&i][3];
+      Else
+         &op = "=";
+         &val = LTrim(RTrim(&filters [&i][2]));
+      End-If;
+      
+      If &i > 1 Then
+         &whereClause = &whereClause | " AND ";
+      End-If;
+      
+      &whereClause = &whereClause | %This.BuildWhereClause(&key, &op, &paramIndex);
+      &bindValues.Push(&val); /* This works because &bindValues is passed by-reference */
+      &paramIndex = &paramIndex + 1;
+   End-For;
+   
+   Return &whereClause;
+end-method;
 
