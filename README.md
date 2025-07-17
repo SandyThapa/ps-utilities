@@ -40,7 +40,7 @@ Local array of string &lTempArry = CreateArrayRept(&lStr, 0);
 &filters.Push(CreateArray("KEY1", "VALUE1"));  
 &filters.Push(CreateArray("KEY2", "VALUE2"));  
 
-Local array of string &selectFields = CreateArray("DESCR254");  /* Not used yet, but planned for future improvements */  
+Local array of string &selectFields = CreateArray("SELECT_FIELD");  /* Not used yet, but planned for future improvements */  
 Local array of string &orderBy = CreateArray("EFFDT DESC");  
 Local string &recName = "TABLE_NAME";  
 
