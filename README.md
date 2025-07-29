@@ -2,6 +2,9 @@
 
 This repository contains reusable PeopleCode methods designed to help developers count and fetch rows from PeopleSoft records using dynamic filters, ordering, and field selection. Originally built for internal use, the code has been refactored for public deployment to support flexible and maintainable App Classes in PeopleSoft.
 
+## Some might argue dynamic SQL adds memory overhead or complexity and that’s valid. But in PeopleCode, where repetitive logic is common, this approach improves maintainability and clarity. I’m open to feedback and optimisation ideas.
+
+
 ## Features
 
 • Generate dynamic SQL for record queries  
