@@ -1,7 +1,7 @@
 /*
 -----------------------------------------------------------------------------------
  
-  GUSAENR32_RITM0090548 Sandy T, 14/07/2025
+  Sandy T, 14/07/2025
   New Class/methods for fetching in rows and getting count from any record, also added another helper function that returns data type of any field
 -----------------------------------------------------------------------------------
 */
