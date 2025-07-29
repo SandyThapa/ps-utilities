@@ -27,7 +27,12 @@ If you leave out the operator, it defaults to "=". For example:
 
 &filters.Push(CreateArray("Key1", "<", "3"));   /* Key1 < 3 */  
 &filters.Push(CreateArray("Key1", "3"));        /* Defaults to Key1 = 3 */  
-&filters.Push(CreateArray("Key1", "<=", "4"));  /* Key1 <= 4 */  
+&filters.Push(CreateArray("Key4", "<=", "4"));  /* Key1 <= 4 */  
+
+&filters.Push(CreateArray("Key3", "in", "GU_GP_ABS_EESS_REQ,CURRENT_ENROL_TERMS"));  /* supports as many values as you want for IN clause as well */'
+&filters.Push(CreateArray("Key4", "LIKE", "PS_GP%"));
+
+   
 
 All of the above are valid.
 
@@ -39,6 +44,8 @@ Local array of string &lTempArry = CreateArrayRept(&lStr, 0);
 
 &filters.Push(CreateArray("KEY1", "VALUE1"));  
 &filters.Push(CreateArray("KEY2", "VALUE2"));  
+&filters.Push(CreateArray("Key3", "in", "GU_GP_ABS_EESS_REQ,CURRENT_ENROL_TERMS"));
+&filters.Push(CreateArray("Key4", "LIKE", "PS_GP%"));
 
 Local array of string &selectFields = CreateArray("SELECT_FIELD");  /* Not used yet, but planned for future improvements */  
 Local array of string &orderBy = CreateArray("EFFDT DESC");  
@@ -50,7 +57,7 @@ Local string &recName = "TABLE_NAME";
 ## GetCount
 &countFilters = CreateArray(
     CreateArray("KEY1", "=", "VALUE1"),
-    CreateArray("KEY2", ">", "VALUE@2")
+    CreateArray("KEY2", ">", "VALUE2")
 );
 
 Local Record &tableName = CreateRecord(Record.RECORD_NAME);
