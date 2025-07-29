@@ -1,10 +1,22 @@
-class GuModel;
-     
+/*
+-----------------------------------------------------------------------------------
+ 
+  GUSAENR32_RITM0090548 Sandy T, 14/07/2025
+  New Class/methods for fetching in rows and getting count from any record, also added another helper function that returns data type of any field
+-----------------------------------------------------------------------------------
+*/
+class PS_Model;
+   
    method GetCount(&tableName As Record, &filters As array of array of string, &fieldName As string) Returns number;
    method FetchRowsFromTable(&filters As array of array of string, &orderByFields As array of string, &selectFields As array of string, &recName As string) Returns array of Record;
    method GetDateType(&fieldName As string) Returns string;
-   method BuildWhereClause(&key As string, &op As string, &paramIndex As integer) Returns string;
+   method BuildWhereClause(&key As string, &op As string, &paramIndex As integer, &val As any) Returns string;
    method BuildWhereClauseFromFilters(&filters As array of array of string, &paramIndex As integer, &bindValues As array of any) Returns string;
+   method FormatClauseForOperator(&key As string, &op As string, &val As any, &dataType As string, &paramIndex As integer) Returns string;
+   method FormatInClause(&val As any, &dataType As string) Returns string;
+   method FormatSingleValue(&val As any, &dataType As string, &operator As string) Returns string;
+   
+   method BuildBindValues(&bindValues As array of any, &lTempArry As array of any);
    
 end-class;
 
@@ -51,9 +63,8 @@ method GetCount
    &sqlText = &sqlText | &whereClause;
    
    /* Pass all bind values to SQL */
-   For &i = 1 To &bindValues.Len
-      &lTempArray.Push(&bindValues [&i]);
-   End-For;
+   %This.BuildBindValues(&bindValues, &lTempArray);
+   
    
    /* Run the query */
    Local SQL &sql = GetSQL(&sqlText, &lTempArray);
@@ -141,11 +152,12 @@ method FetchRowsFromTable
       End-For;
    End-If;
    
+   
+   
    /* Prepare SQL Bind Values */
-   For &k = 1 To &bindValues.Len
-      &lTempArry.Push(&bindValues [&k]);
-      
-   End-For;
+   
+   %This.BuildBindValues(&bindValues, &lTempArry);
+   
    
    /* Future scope, is to make dynamic select as per sql clause but for now, we will just select *
    Local string &lSqlStr = "SELECT " | &selectClause | " FROM ps_gu_config_data b WHERE " | &whereClause | &orderClause;
@@ -174,12 +186,15 @@ method FetchRowsFromTable
    
 end-method;
 
+
+
 /**
  * GetDateType
  * 
  * @param string $fieldName
  * @return string
  */
+
 
 method GetDateType
    /+ &fieldName as String +/
@@ -259,11 +274,11 @@ end-method;
 method BuildWhereClause
    /+ &key as String, +/
    /+ &op as String, +/
-   /+ &paramIndex as Integer +/
+   /+ &paramIndex as Integer, +/
+   /+ &val as Any +/
    /+ Returns String +/
    Local string &clause;
    Local string &dataType = %This.GetDateType(&key);
-   
    
    Evaluate &dataType
    When = "Date"
@@ -273,7 +288,17 @@ method BuildWhereClause
    When = "DateTime"
       &clause = "b." | &key | " " | &op | " %DATETIMEIN(:" | &paramIndex | " ) ";
    When-Other
-      &clause = "b." | &key | " " | &op | " :" | &paramIndex;
+      /* sandy change */
+      If Upper(LTrim(RTrim(&op))) = "IN" Then
+         &clause = "b." | &key | " " | &op | " " | &val;
+         
+      Else
+         &clause = "b." | &key | " " | &op | " :" | &paramIndex;
+      End-If;
+      /* sandy change */
+      
+      
+      
    End-Evaluate;
    
    Return &clause;
@@ -296,16 +321,16 @@ method BuildWhereClauseFromFilters
    /+ &bindValues as Array of Any +/
    /+ Returns String +/
    Local string &whereClause = "";
+   
    Local string &key, &op;
    Local any &val;
    Local integer &i;
    
    For &i = 1 To &filters.Len
       &key = LTrim(RTrim(&filters [&i][1]));
-      
-      If &filters [&i].Len = 3 Then
-         &op = LTrim(RTrim(&filters [&i][2]));
-         &val = &filters [&i][3];
+      If &filters [&i].Len >= 3 Then
+         &op = Upper(LTrim(RTrim(&filters [&i][2])));
+         &val = LTrim(RTrim(&filters [&i][3]));
       Else
          &op = "=";
          &val = LTrim(RTrim(&filters [&i][2]));
@@ -315,11 +340,160 @@ method BuildWhereClauseFromFilters
          &whereClause = &whereClause | " AND ";
       End-If;
       
-      &whereClause = &whereClause | %This.BuildWhereClause(&key, &op, &paramIndex);
-      &bindValues.Push(&val); /* This works because &bindValues is passed by-reference */
-      &paramIndex = &paramIndex + 1;
+      &whereClause = &whereClause | %This.FormatClauseForOperator(&key, &op, &val, %This.GetDateType(&key), &paramIndex);
+      If Upper(LTrim(RTrim(&op))) <> "IN" Then /* No need to put bind value for IN as we are passing IN as string directly in where clause, peoplecode doesnt support dynamic IN binding for more than 1 value */
+         &bindValues.Push(&val); /* This works because &bindValues is passed by-reference */
+         &paramIndex = &paramIndex + 1;
+      End-If;
+   End-For;
+   Return &whereClause;
+end-method;
+
+
+/**
+ * Builds a SQL clause string based on the operator and value provided.
+ *
+ * This method dynamically constructs SQL clauses for supported operators such as IN and BETWEEN.
+ * It uses helper methods FormatInClause and FormatSingleValue to format values appropriately.
+ * For unsupported or custom operators, it defaults to a standard field/operator/value format.
+ *
+ * @param String &key The field name to be used in the clause.
+ * @param String &op The SQL operator (e.g., "IN", "BETWEEN", "=", etc.).
+ * @param Any &val The value or values to be used in the clause.
+ * @param String &dataType The data type of the value ("Date", "Time", "DateTime", or other).
+ * @param Integer &paramIndex The index used for bind variable formatting in non-IN/BETWEEN cases.
+ * @return String A formatted SQL clause string.
+ */
+
+method FormatClauseForOperator
+   /+ &key as String, +/
+   /+ &op as String, +/
+   /+ &val as Any, +/
+   /+ &dataType as String, +/
+   /+ &paramIndex as Integer +/
+   /+ Returns String +/
+   
+   Local string &clause;
+   Local string &fieldRef = "b." | &key;
+   
+   Evaluate Upper(&op)
+   When "IN"
+      &clause = &fieldRef | " IN " | %This.FormatInClause(&val, &dataType);
+   When "BETWEEN"
+      Local array of string &range = Split(&val, "|");
+      If &range.Len = 2 Then
+         &clause = &fieldRef | " BETWEEN " | %This.FormatSingleValue(&range [1], &dataType, &op) | " AND " | %This.FormatSingleValue(&range [2], &dataType, &op);
+      Else
+         &clause = "/* ERROR: Invalid BETWEEN format */";
+      End-If;
+      /* future additions of more operators as needed */
+      /* When "IS NULL", "IS NOT NULL"
+         When "LIKE"
+     
+	   */
+   When-Other
+      &clause = &fieldRef | " " | &op | %This.FormatSingleValue(&paramIndex, &dataType, &op);
+      
+   End-Evaluate;
+   
+   Return &clause;
+end-method;
+
+
+/**
+ * Formats a comma-separated list of values into an SQL IN clause.
+ *
+ * This method splits the input string by commas, trims each item,
+ * and wraps each formatted value using FormatSingleValue with the "IN" operator.
+ * The result is a syntactically correct SQL IN clause string.
+ *
+ * @param Any &val A comma-separated string of values to include in the IN clause.
+ * @param String &dataType The data type of the values ("Date", "Time", "DateTime", or other).
+ * @return String A formatted SQL IN clause string.
+ */
+
+method FormatInClause
+   /+ &val as Any, +/
+   /+ &dataType as String +/
+   /+ Returns String +/
+   
+   Local array of string &items;
+   Local string &clause = "(";
+   Local integer &i;
+   
+   &items = Split(&val, ",");
+   
+   For &i = 1 To &items.Len
+      &items [&i] = LTrim(RTrim(&items [&i]));
+      &clause = &clause | "'" | %This.FormatSingleValue(&items [&i], &dataType, "IN") | "'";
+      
+      If &i < &items.Len Then
+         &clause = &clause | ", ";
+      End-If;
    End-For;
    
-   Return &whereClause;
+   &clause = &clause | ")";
+   Return &clause;
+end-method;
+
+
+
+/**
+ * Formats a single value for use in dynamic SQL based on its data type and operator.
+ *
+ * This method returns a formatted string representation of the input value,
+ * applying appropriate SQL functions for date, time, or datetime types.
+ * If the operator is not "IN", a colon prefix is added to indicate a bind variable.
+ *
+ * @param Any &val The value to be formatted.
+ * @param String &dataType The data type of the value ("Date", "Time", "DateTime", or other).
+ * @param String &operator The SQL operator being used (e.g., "=", "IN").
+ * @return String The formatted SQL-ready string.
+ */
+
+method FormatSingleValue
+   /+ &val as Any, +/
+   /+ &dataType as String, +/
+   /+ &operator as String +/
+   /+ Returns String +/
+   Local string &colon = "";
+   
+   If (&operator <> "IN") Then
+      &colon = ":";
+   End-If;
+   
+   Evaluate &dataType
+   When = "Date"
+      Return "%DATEIN(" | &colon | "" | &val | " ) ";
+   When = "Time"
+      Return "%TIMEIN(" | &colon | "" | &val | " ) ";
+   When = "DateTime"
+      Return "%DATETIMEIN(" | &colon | "" | &val | " ) ";
+   When-Other
+      Return "" | &colon | "" | &val;
+   End-Evaluate;
+end-method;
+
+
+/**
+ * Copies values from the bindValues array into lTempArry.
+ *
+ * This method iterates through each element in the bindValues array
+ * and pushes it into the lTempArry array. It is typically used to
+ * prepare bind parameters for dynamic SQL execution.
+ *
+ * @param Array of Any &bindValues The source array containing values to bind.
+ * @param Array of Any &lTempArry The target array that will receive the copied values.
+ * @return void
+ */
+
+
+method BuildBindValues
+   /+ &bindValues as Array of Any, +/
+   /+ &lTempArry as Array of Any +/
+   Local integer &k = 1;
+   For &k = 1 To &bindValues.Len
+      &lTempArry.Push(&bindValues [&k]);
+   End-For;
 end-method;
 
