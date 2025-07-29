@@ -5,7 +5,7 @@
   New Class/methods for fetching in rows and getting count from any record, also added another helper function that returns data type of any field
 -----------------------------------------------------------------------------------
 */
-class PS_Model;
+class GuModel;
    
    method GetCount(&tableName As Record, &filters As array of array of string, &fieldName As string) Returns number;
    method FetchRowsFromTable(&filters As array of array of string, &orderByFields As array of string, &selectFields As array of string, &recName As string) Returns array of Record;
@@ -15,7 +15,6 @@ class PS_Model;
    method FormatClauseForOperator(&key As string, &op As string, &val As any, &dataType As string, &paramIndex As integer) Returns string;
    method FormatInClause(&val As any, &dataType As string) Returns string;
    method FormatSingleValue(&val As any, &dataType As string, &operator As string) Returns string;
-   
    method BuildBindValues(&bindValues As array of any, &lTempArry As array of any);
    
 end-class;
@@ -100,7 +99,6 @@ method FetchRowsFromTable
    Local string &whereClause = "";
    Local string &orderClause = "";
    Local string &selectClause = "";
-   rem  Local array of String &bindValues = CreateArrayRept("", 0);
    Local array of any &bindValues;
    
    Local string &key, &op;
