@@ -5,7 +5,7 @@
   New Class/methods for fetching in rows and getting count from any record, also added another helper function that returns data type of any field
 -----------------------------------------------------------------------------------
 */
-class GuModel;
+class PS_Model;
    
    method GetCount(&tableName As Record, &filters As array of array of string, &fieldName As string) Returns number;
    method FetchRowsFromTable(&filters As array of array of string, &orderByFields As array of string, &selectFields As array of string, &recName As string) Returns array of Record;
