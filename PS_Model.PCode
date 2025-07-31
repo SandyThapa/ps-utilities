@@ -377,7 +377,7 @@ method FormatClauseForOperator
    Evaluate Upper(&op)
    When "IN"
       &clause = &fieldRef | " IN " | %This.FormatInClause(&val, &dataType);
-   When "BETWEEN"
+   When "BETWEEN"  /**May contain error, not tested, need to play around if we can pass bind values as :1 , : 2 or need to pass actual values as IN clause ****/
       Local array of string &range = Split(&val, "|");
       If &range.Len = 2 Then
          &clause = &fieldRef | " BETWEEN " | %This.FormatSingleValue(&range [1], &dataType, &op) | " AND " | %This.FormatSingleValue(&range [2], &dataType, &op);
